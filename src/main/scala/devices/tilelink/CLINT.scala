@@ -62,16 +62,23 @@ class CLINT(params: CLINTParams, beatBytes: Int)(implicit p: Parameters) extends
     Annotated.params(this, params)
     require (intnode.edges.in.size == 0, "CLINT only produces interrupts; it does not accept them")
 
+    val nTiles = intnode.out.size
     val io = IO(new Bundle {
       val rtcTick = Bool(INPUT)
+      val irqbusy = Vec(nTiles, Bool()).asInput
     })
 
     val time = RegInit(UInt(0, width = timeWidth))
     when (io.rtcTick) { time := time + UInt(1) }
 
-    val nTiles = intnode.out.size
+    // val nTiles = intnode.out.size
     val timecmp = Seq.fill(nTiles) { Reg(UInt(width = timeWidth)) }
     val ipi = Seq.fill(nTiles) { RegInit(UInt(0, width = 1)) }
+
+    //  add by Heng, dynamically increasing compare register when in irq handling
+    io.irqbusy.zipWithIndex.foreach{ case (busy, i) =>
+      timecmp(i) := Mux(busy, timecmp(i) + UInt(1), timecmp(i))
+    }
 
     val (intnode_out, _) = intnode.out.unzip
     intnode_out.zipWithIndex.foreach { case (int, i) =>

@@ -84,4 +84,5 @@ class RocketSubsystemModuleImp[+L <: RocketSubsystem](_outer: L) extends BaseSub
     wire.hartid := UInt(i)
     wire.reset_vector := global_reset_vector
   }
+  outer.clintOpt.get.module.io.irqbusy := outer.plicOpt.get.module.io.irqbusy
 }

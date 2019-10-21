@@ -126,6 +126,11 @@ class TLPLIC(params: PLICParams, beatBytes: Int)(implicit p: Parameters) extends
   lazy val module = new LazyModuleImp(this) {
     Annotated.params(this, params)
 
+    //added by Heng
+    val io = IO(new Bundle {
+      val irqbusy = Vec(nHarts/2, Bool()).asOutput
+    })
+
     val (io_devices, edgesIn) = intnode.in.unzip
     val (io_harts, _) = intnode.out.unzip
 
@@ -257,6 +262,20 @@ class TLPLIC(params: PLICParams, beatBytes: Int)(implicit p: Parameters) extends
     (gateways zip completedDevs.asBools.tail) foreach { case (g, c) =>
        g.complete := c
     }
+
+    //here we assume its enable vm, so always 2 context/real hart
+    val busy_whole = RegInit(Vec(Seq.fill(nHarts){Bool(false)}))
+    val busy_m = Wire(Vec(nHarts/2, Bool()))
+    val busy_s = Wire(Vec(nHarts/2, Bool()))
+    // //added by Heng, indicating when someone is handling irq, let CLINT increase the timecmp
+    ((busy_whole zip claimer) zip completer) foreach { case ((busy, claim), complete) =>
+       busy := Mux(claim, Bool(true), Mux(complete, Bool(false), busy))
+    }
+
+    busy_m := busy_whole.zipWithIndex.filter(_._2 % 2 == 0).map(_._1)
+    busy_s := busy_whole.zipWithIndex.filter(_._2 % 2 == 1).map(_._1)
+    io.irqbusy := busy_m | busy_s
+    // io.irqbusy := completer.zipWithIndex.filter(_._2 % 2 == 0).map(_._1)
 
     def thresholdRegDesc(i: Int) =
       RegFieldDesc(
